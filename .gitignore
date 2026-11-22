@@ -1,0 +1,10 @@
+.pio
+.vscode
+*.bin
+*.elf
+*.o
+*.a
+*.log
+__pycache__/
+.DS_Store
+Thumbs.db
