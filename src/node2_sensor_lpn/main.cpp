@@ -45,8 +45,10 @@ static esp_ble_mesh_model_op_t vnd_op[] = {
 
 ESP_BLE_MESH_MODEL_PUB_DEFINE(vnd_pub, 3 + 1, ROLE_NODE);
 
+static esp_ble_mesh_client_t vnd_client;
+
 static esp_ble_mesh_model_t vnd_models[] = {
-    ESP_BLE_MESH_VENDOR_MODEL(CID_ESP, 0x0002, vnd_op, &vnd_pub, NULL),
+    ESP_BLE_MESH_VENDOR_MODEL(CID_ESP, 0x0002, vnd_op, &vnd_pub, &vnd_client),
 };
 
 static esp_ble_mesh_elem_t elements[] = {

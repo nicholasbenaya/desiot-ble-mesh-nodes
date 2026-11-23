@@ -51,9 +51,9 @@ static const uint8_t dev_app_key[16] = {
 #define PIN_NODE4_LED           2
 
 // --- Konfigurasi Jaringan Wi-Fi & MQTT (Node 4) ---
-#define WIFI_SSID_DEFAULT       "Hotspot_IoT"
-#define WIFI_PASS_DEFAULT       "12345678"
-#define MQTT_SERVER_DEFAULT     "192.168.1.100" // Ganti dengan IP Laptop Host
+#define WIFI_SSID_DEFAULT       "iPhone"
+#define WIFI_PASS_DEFAULT       "acikiwir"
+#define MQTT_SERVER_DEFAULT     "172.20.10.8" // Ganti dengan IP Laptop Host
 #define MQTT_PORT_DEFAULT       1883
 
 // Topik MQTT untuk Komputer Host (Eclipse Mosquitto)
