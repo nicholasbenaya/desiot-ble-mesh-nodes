@@ -102,10 +102,9 @@ void forward_mqtt_to_mesh(uint8_t state) {
         .send_ttl = 3,
     };
 
-    esp_err_t err = esp_ble_mesh_client_model_send_msg(&vnd_models[0], &ctx,
+    esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0], &ctx,
                                                        ESP_BLE_MESH_VND_MODEL_OP_SET,
-                                                       sizeof(state), &state,
-                                                       0, false, ROLE_NODE);
+                                                       sizeof(state), &state);
     Serial.printf("[NODE 4 - GATEWAY] Meneruskan MQTT CMD -> BLE Mesh (Pompa: %s, code: %d)\n",
                   state ? "ON" : "OFF", err);
 }

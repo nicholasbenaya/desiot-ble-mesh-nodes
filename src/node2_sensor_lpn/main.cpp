@@ -89,10 +89,9 @@ void send_mesh_onoff_cmd(uint8_t state) {
         .send_ttl = 3,
     };
 
-    esp_err_t err = esp_ble_mesh_client_model_send_msg(&vnd_models[0], &ctx,
+    esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0], &ctx,
                                                        ESP_BLE_MESH_VND_MODEL_OP_SET,
-                                                       sizeof(state), &state,
-                                                       0, false, ROLE_NODE);
+                                                       sizeof(state), &state);
     if (err == ESP_OK) {
         Serial.printf("[NODE 2 - LPN] Berhasil mengirim perintah OnOff: %d ke Node 1 (Pompa)\n", state);
     } else {
@@ -110,10 +109,9 @@ void send_mesh_sensor_telemetry(int raw_val) {
         .send_ttl = 3,
     };
 
-    esp_err_t err = esp_ble_mesh_client_model_send_msg(&vnd_models[0], &ctx,
+    esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0], &ctx,
                                                        ESP_BLE_MESH_VND_MODEL_OP_SENSOR,
-                                                       sizeof(val16), (uint8_t*)&val16,
-                                                       0, false, ROLE_NODE);
+                                                       sizeof(val16), (uint8_t*)&val16);
     if (err == ESP_OK) {
         Serial.printf("[NODE 2 - LPN] Data kelembapan (%d) dikirim ke Gateway.\n", raw_val);
     }
