@@ -14,6 +14,19 @@
 #include <esp_ble_mesh_config_model_api.h>
 #include "mesh_config.h"
 
+extern "C" {
+    int bt_mesh_provision(const uint8_t net_key[16], uint16_t net_idx,
+                          uint8_t flags, uint32_t iv_index, uint16_t addr,
+                          const uint8_t dev_key[16]);
+    struct bt_mesh_app_key *bt_mesh_app_key_alloc(uint16_t app_idx);
+    bool bt_mesh_is_provisioned(void);
+
+    void bt_mesh_prov_complete(uint16_t net_idx, const uint8_t net_key[16],
+                               uint16_t addr, uint8_t flags, uint32_t iv_index) {
+        Serial.printf("[MESH CORE] Node 3 Provisioned (Addr: 0x%04X)\n", addr);
+    }
+}
+
 // Statistik Routing Paket
 static unsigned long packets_relayed = 0;
 static unsigned long lpn_messages_cached = 0;
@@ -81,6 +94,17 @@ void init_relay_friend_mesh() {
     if (err != ESP_OK) {
         Serial.printf("[NODE 3] Gagal inisialisasi BLE Mesh: %d\n", err);
         return;
+    }
+
+    if (!bt_mesh_is_provisioned()) {
+        int prov_res = bt_mesh_provision(dev_net_key, ESP_BLE_MESH_NET_IDX, 0, 0, ADDR_RELAY_FRIEND_NODE, dev_net_key);
+        Serial.printf("[NODE 3] Static Provisioning (Addr: 0x%04X, res: %d)\n", ADDR_RELAY_FRIEND_NODE, prov_res);
+    }
+    struct bt_mesh_app_key *k = bt_mesh_app_key_alloc(ESP_BLE_MESH_APP_IDX);
+    if (k) {
+        k->net_idx = ESP_BLE_MESH_NET_IDX;
+        k->app_idx = ESP_BLE_MESH_APP_IDX;
+        memcpy(k->keys[0].val, dev_app_key, 16);
     }
 
     // Mengaktifkan Fitur Relay dan Friend

@@ -118,6 +118,19 @@ void set_pump(uint8_t state, const char* source) {
     Serial.println("==================================================");
 }
 
+extern "C" {
+    int bt_mesh_provision(const uint8_t net_key[16], uint16_t net_idx,
+                          uint8_t flags, uint32_t iv_index, uint16_t addr,
+                          const uint8_t dev_key[16]);
+    struct bt_mesh_app_key *bt_mesh_app_key_alloc(uint16_t app_idx);
+    bool bt_mesh_is_provisioned(void);
+
+    void bt_mesh_prov_complete(uint16_t net_idx, const uint8_t net_key[16],
+                               uint16_t addr, uint8_t flags, uint32_t iv_index) {
+        Serial.printf("[MESH CORE] Provisioning Complete Event (Addr: 0x%04X)\n", addr);
+    }
+}
+
 void init_ble_mesh() {
     esp_err_t err;
 
@@ -142,6 +155,19 @@ void init_ble_mesh() {
         Serial.printf("[NODE 1] Gagal inisialisasi BLE Mesh: %d\n", err);
         return;
     }
+
+    if (!bt_mesh_is_provisioned()) {
+        int prov_res = bt_mesh_provision(dev_net_key, ESP_BLE_MESH_NET_IDX, 0, 0, ADDR_PUMP_NODE, dev_net_key);
+        Serial.printf("[NODE 1] Static Provisioning (Addr: 0x%04X, res: %d)\n", ADDR_PUMP_NODE, prov_res);
+    }
+
+    struct bt_mesh_app_key *k = bt_mesh_app_key_alloc(ESP_BLE_MESH_APP_IDX);
+    if (k) {
+        k->net_idx = ESP_BLE_MESH_NET_IDX;
+        k->app_idx = ESP_BLE_MESH_APP_IDX;
+        memcpy(k->keys[0].val, dev_app_key, 16);
+    }
+    vnd_models[0].keys[0] = ESP_BLE_MESH_APP_IDX;
 
     Serial.println("[NODE 1] BLE Mesh Node 1 (Pompa Server) Berhasil Dimulai!");
     Serial.println("[NODE 1] Node siaga mendengar perintah On/Off dari Mesh.");

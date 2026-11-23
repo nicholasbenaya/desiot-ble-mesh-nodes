@@ -16,6 +16,19 @@
 #include <esp_ble_mesh_low_power_api.h>
 #include "mesh_config.h"
 
+extern "C" {
+    int bt_mesh_provision(const uint8_t net_key[16], uint16_t net_idx,
+                          uint8_t flags, uint32_t iv_index, uint16_t addr,
+                          const uint8_t dev_key[16]);
+    struct bt_mesh_app_key *bt_mesh_app_key_alloc(uint16_t app_idx);
+    bool bt_mesh_is_provisioned(void);
+
+    void bt_mesh_prov_complete(uint16_t net_idx, const uint8_t net_key[16],
+                               uint16_t addr, uint8_t flags, uint32_t iv_index) {
+        Serial.printf("[MESH CORE] Node 2 Provisioned (Addr: 0x%04X)\n", addr);
+    }
+}
+
 // Opcode Vendor Model
 #define ESP_BLE_MESH_VND_MODEL_OP_SET       ESP_BLE_MESH_MODEL_OP_3(0x01, CID_ESP)
 #define ESP_BLE_MESH_VND_MODEL_OP_STATUS    ESP_BLE_MESH_MODEL_OP_3(0x02, CID_ESP)
@@ -45,10 +58,8 @@ static esp_ble_mesh_model_op_t vnd_op[] = {
 
 ESP_BLE_MESH_MODEL_PUB_DEFINE(vnd_pub, 3 + 1, ROLE_NODE);
 
-static esp_ble_mesh_client_t vnd_client;
-
 static esp_ble_mesh_model_t vnd_models[] = {
-    ESP_BLE_MESH_VENDOR_MODEL(CID_ESP, 0x0002, vnd_op, &vnd_pub, &vnd_client),
+    ESP_BLE_MESH_VENDOR_MODEL(CID_ESP, 0x0002, vnd_op, &vnd_pub, NULL),
 };
 
 static esp_ble_mesh_elem_t elements[] = {
@@ -166,7 +177,19 @@ void setup() {
     BLEDevice::init("Node2-LPN");
     esp_err_t err = esp_ble_mesh_init(&prov, &composition);
     if (err == ESP_OK) {
-        Serial.println("[NODE 2 - LPN] BLE Mesh diinisialisasi.");
+        if (!bt_mesh_is_provisioned()) {
+            int prov_res = bt_mesh_provision(dev_net_key, ESP_BLE_MESH_NET_IDX, 0, 0, ADDR_SENSOR_NODE, dev_net_key);
+            Serial.printf("[NODE 2] Static Provisioning (Addr: 0x%04X, res: %d)\n", ADDR_SENSOR_NODE, prov_res);
+        }
+        struct bt_mesh_app_key *k = bt_mesh_app_key_alloc(ESP_BLE_MESH_APP_IDX);
+        if (k) {
+            k->net_idx = ESP_BLE_MESH_NET_IDX;
+            k->app_idx = ESP_BLE_MESH_APP_IDX;
+            memcpy(k->keys[0].val, dev_app_key, 16);
+        }
+        vnd_models[0].keys[0] = ESP_BLE_MESH_APP_IDX;
+
+        Serial.println("[NODE 2 - LPN] BLE Mesh diinisialisasi & terhubung.");
         delay(100);
 
         // Kirim status OnOff ke Node 1 (Pompa)
