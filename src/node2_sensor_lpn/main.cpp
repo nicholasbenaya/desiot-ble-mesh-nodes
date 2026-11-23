@@ -6,6 +6,7 @@
  * ========================================================================= */
 
 #include <Arduino.h>
+#include <BLEDevice.h>
 #include <esp_sleep.h>
 #include <esp_ble_mesh_defs.h>
 #include <esp_ble_mesh_common_api.h>
@@ -162,6 +163,7 @@ void setup() {
     Serial.printf("[NODE 2 - SENSOR] Nilai Analog: %d | Status: %s\n", moisture_raw, status_tanah);
 
     // 3. Inisialisasi Stack BLE Mesh
+    BLEDevice::init("Node2-LPN");
     esp_err_t err = esp_ble_mesh_init(&prov, &composition);
     if (err == ESP_OK) {
         Serial.println("[NODE 2 - LPN] BLE Mesh diinisialisasi.");

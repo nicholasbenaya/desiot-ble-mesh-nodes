@@ -9,6 +9,7 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <BLEDevice.h>
 #include <esp_ble_mesh_defs.h>
 #include <esp_ble_mesh_common_api.h>
 #include <esp_ble_mesh_networking_api.h>
@@ -219,6 +220,7 @@ void setup() {
     mqttClient.setCallback(mqtt_callback);
 
     // 3. Inisialisasi Stack BLE Mesh (Proxy & Provisioner)
+    BLEDevice::init("Node4-Gateway");
     esp_ble_mesh_register_custom_model_callback(ble_mesh_custom_model_cb);
     esp_ble_mesh_init(&prov, &composition);
     Serial.println("[NODE 4] BLE Mesh GATT Proxy & Provisioner Siap!");

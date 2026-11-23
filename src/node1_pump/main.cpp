@@ -6,6 +6,7 @@
  * ========================================================================= */
 
 #include <Arduino.h>
+#include <BLEDevice.h>
 #include <esp_ble_mesh_defs.h>
 #include <esp_ble_mesh_common_api.h>
 #include <esp_ble_mesh_networking_api.h>
@@ -120,6 +121,10 @@ void set_pump(uint8_t state, const char* source) {
 void init_ble_mesh() {
     esp_err_t err;
 
+    // 1. Inisialisasi Stack Bluetooth (Controller & Bluedroid) via BLEDevice
+    BLEDevice::init("Node1-Pump");
+
+    // 2. Inisialisasi BLE Mesh
     err = esp_ble_mesh_register_prov_callback(ble_mesh_provisioning_cb);
     if (err != ESP_OK) {
         Serial.printf("[NODE 1] Gagal register prov callback: %d\n", err);
@@ -147,7 +152,7 @@ void setup() {
     delay(1000);
 
     Serial.println("\n--------------------------------------------------");
-    Serial.println("DESIOT ITS - NODE 1: POMPA AIR DC (VENDOR SERVER)");
+    Serial.println("DESIOT ITS - NODE 1: POMPA AIR DC (ONOFF SERVER)");
     Serial.println("Modul Relay: Active-LOW Mode (1 = Nyala, 0 = Mati)");
     Serial.println("--------------------------------------------------");
 

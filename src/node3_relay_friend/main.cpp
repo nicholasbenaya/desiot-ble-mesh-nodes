@@ -6,6 +6,7 @@
  * ========================================================================= */
 
 #include <Arduino.h>
+#include <BLEDevice.h>
 #include <esp_ble_mesh_defs.h>
 #include <esp_ble_mesh_common_api.h>
 #include <esp_ble_mesh_networking_api.h>
@@ -71,6 +72,9 @@ void init_relay_friend_mesh() {
         Serial.printf("[NODE 3] Gagal reg prov cb: %d\n", err);
         return;
     }
+
+    // Inisialisasi Stack Bluetooth via BLEDevice
+    BLEDevice::init("Node3-RelayFriend");
 
     // Inisialisasi Mesh
     err = esp_ble_mesh_init(&prov, &composition);
