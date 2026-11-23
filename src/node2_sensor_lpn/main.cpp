@@ -20,11 +20,13 @@ extern "C" {
     int bt_mesh_provision(const uint8_t net_key[16], uint16_t net_idx,
                           uint8_t flags, uint32_t iv_index, uint16_t addr,
                           const uint8_t dev_key[16]);
+    int bt_mesh_net_create(uint16_t net_idx, uint8_t flags, const uint8_t key[16], uint32_t iv_index);
     struct bt_mesh_app_key *bt_mesh_app_key_alloc(uint16_t app_idx);
     bool bt_mesh_is_provisioned(void);
 
     void bt_mesh_prov_complete(uint16_t net_idx, const uint8_t net_key[16],
                                uint16_t addr, uint8_t flags, uint32_t iv_index) {
+        bt_mesh_net_create(net_idx, flags, net_key, iv_index);
         Serial.printf("[MESH CORE] Node 2 Provisioned (Addr: 0x%04X)\n", addr);
     }
 }
@@ -181,6 +183,7 @@ void setup() {
             int prov_res = bt_mesh_provision(dev_net_key, ESP_BLE_MESH_NET_IDX, 0, 0, ADDR_SENSOR_NODE, dev_net_key);
             Serial.printf("[NODE 2] Static Provisioning (Addr: 0x%04X, res: %d)\n", ADDR_SENSOR_NODE, prov_res);
         }
+        bt_mesh_net_create(ESP_BLE_MESH_NET_IDX, 0, dev_net_key, 0);
         struct bt_mesh_app_key *k = bt_mesh_app_key_alloc(ESP_BLE_MESH_APP_IDX);
         if (k) {
             k->net_idx = ESP_BLE_MESH_NET_IDX;
