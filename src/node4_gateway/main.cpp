@@ -17,6 +17,11 @@
 #include <esp_ble_mesh_config_model_api.h>
 #include "mesh_config.h"
 
+// Opcode Vendor Model
+#define ESP_BLE_MESH_VND_MODEL_OP_SET       ESP_BLE_MESH_MODEL_OP_3(0x01, CID_ESP)
+#define ESP_BLE_MESH_VND_MODEL_OP_STATUS    ESP_BLE_MESH_MODEL_OP_3(0x02, CID_ESP)
+#define ESP_BLE_MESH_VND_MODEL_OP_SENSOR    ESP_BLE_MESH_MODEL_OP_3(0x03, CID_ESP)
+
 // Client Wi-Fi dan MQTT
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
@@ -35,17 +40,23 @@ static esp_ble_mesh_cfg_srv_t config_server = {
     .default_ttl = 7,
 };
 
-// Model Client Generic OnOff (untuk mengirim override dari MQTT ke Mesh)
-static esp_ble_mesh_client_t onoff_client;
-ESP_BLE_MESH_MODEL_PUB_DEFINE(onoff_cli_pub, 2 + 1, ROLE_NODE);
-
 static esp_ble_mesh_model_t root_models[] = {
     ESP_BLE_MESH_MODEL_CFG_SRV(&config_server),
-    ESP_BLE_MESH_MODEL_GEN_ONOFF_CLI(&onoff_cli_pub, &onoff_client),
+};
+
+static esp_ble_mesh_model_op_t vnd_op[] = {
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_VND_MODEL_OP_SENSOR, 2),
+    ESP_BLE_MESH_MODEL_OP_END,
+};
+
+ESP_BLE_MESH_MODEL_PUB_DEFINE(vnd_pub, 3 + 1, ROLE_NODE);
+
+static esp_ble_mesh_model_t vnd_models[] = {
+    ESP_BLE_MESH_VENDOR_MODEL(CID_ESP, 0x0004, vnd_op, &vnd_pub, NULL),
 };
 
 static esp_ble_mesh_elem_t elements[] = {
-    ESP_BLE_MESH_ELEMENT(0, root_models, ESP_BLE_MESH_MODEL_NONE),
+    ESP_BLE_MESH_ELEMENT(0, root_models, vnd_models),
 };
 
 static esp_ble_mesh_comp_t composition = {
@@ -62,31 +73,38 @@ static esp_ble_mesh_prov_t prov = {
     .uuid = dev_uuid,
 };
 
+void publish_telemetry_to_mqtt(int moisture_val, const char* status, uint8_t pump_state);
+
+// Callback saat menerima pesan Custom/Vendor Model (Telemetri dari Node 2)
+static void ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event,
+                                     esp_ble_mesh_model_cb_param_t *param) {
+    if (event == ESP_BLE_MESH_MODEL_OPERATION_EVT) {
+        if (param->model_operation.opcode == ESP_BLE_MESH_VND_MODEL_OP_SENSOR && param->model_operation.length >= 2) {
+            uint16_t sensor_val;
+            memcpy(&sensor_val, param->model_operation.msg, sizeof(sensor_val));
+            const char* kondisi = (sensor_val >= SOIL_DRY_THRESHOLD) ? "KERING" :
+                                  ((sensor_val <= SOIL_WET_THRESHOLD) ? "BASAH" : "OPTIMAL");
+            uint8_t p_state = (sensor_val >= SOIL_DRY_THRESHOLD) ? 1 : 0;
+            publish_telemetry_to_mqtt((int)sensor_val, kondisi, p_state);
+        }
+    }
+}
+
 // Fungsi Mengirim Perintah Mesh ke Node 1 (Pompa)
 void forward_mqtt_to_mesh(uint8_t state) {
-    esp_ble_mesh_generic_client_set_state_t set_state;
-    set_state.onoff_set.op_en = false;
-    set_state.onoff_set.onoff = state;
-    set_state.onoff_set.tid = (uint8_t)millis();
-
-    esp_ble_mesh_client_common_param_t common = {
-        .opcode = ESP_BLE_MESH_MODEL_OP_GEN_ONOFF_SET_UNACK,
-        .model = &root_models[1],
-        .ctx = {
-            .net_idx = ESP_BLE_MESH_NET_IDX,
-            .app_idx = ESP_BLE_MESH_APP_IDX,
-            .addr = ADDR_PUMP_NODE, // Target: Node 1 (Pompa)
-            .send_rel = false,
-            .send_ttl = 3,
-            .send_tag = 0,
-        },
-        .msg_timeout = 0,
-        .role = ROLE_NODE,
+    esp_ble_mesh_msg_ctx_t ctx = {
+        .net_idx = ESP_BLE_MESH_NET_IDX,
+        .app_idx = ESP_BLE_MESH_APP_IDX,
+        .addr = ADDR_PUMP_NODE, // Target: Node 1 (Pompa)
+        .send_ttl = 3,
     };
 
-    esp_ble_mesh_generic_client_set_state(&common, &set_state);
-    Serial.printf("[NODE 4 - GATEWAY] Meneruskan MQTT CMD -> BLE Mesh (Pompa: %s)\n",
-                  state ? "ON" : "OFF");
+    esp_err_t err = esp_ble_mesh_client_model_send_msg(&vnd_models[0], &ctx,
+                                                       ESP_BLE_MESH_VND_MODEL_OP_SET,
+                                                       sizeof(state), &state,
+                                                       0, false, ROLE_NODE);
+    Serial.printf("[NODE 4 - GATEWAY] Meneruskan MQTT CMD -> BLE Mesh (Pompa: %s, code: %d)\n",
+                  state ? "ON" : "OFF", err);
 }
 
 // Callback saat menerima pesan MQTT dari Komputer Host
@@ -201,6 +219,7 @@ void setup() {
     mqttClient.setCallback(mqtt_callback);
 
     // 3. Inisialisasi Stack BLE Mesh (Proxy & Provisioner)
+    esp_ble_mesh_register_custom_model_callback(ble_mesh_custom_model_cb);
     esp_ble_mesh_init(&prov, &composition);
     Serial.println("[NODE 4] BLE Mesh GATT Proxy & Provisioner Siap!");
     Serial.println("[NODE 4] Menjembatani pesan BLE Mesh -> MQTT Broker Komputer.");

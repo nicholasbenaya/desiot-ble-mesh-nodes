@@ -1,8 +1,8 @@
 /* =========================================================================
- * NODE 1: POMPA AIR DC (ONOFF SERVER)
+ * NODE 1: POMPA AIR DC (VENDOR SERVER MODEL - ACTIVE-LOW RELAY)
  * Mata Kuliah : Desain dan Aplikasi IoT - ITS Surabaya
- * Peran Mesh  : Generic OnOff Server (Wajib Siaga / Always Listening)
- * Hardware    : ESP32 DevKit, Modul Relay 1-Channel 5V, Pompa Air DC 3-5V
+ * Peran Mesh  : BLE Mesh Node Siaga (Always Listening)
+ * Hardware    : ESP32-S3 DevKit, Modul Relay 1-Channel 5V, Pompa Air DC 3-5V
  * ========================================================================= */
 
 #include <Arduino.h>
@@ -11,18 +11,21 @@
 #include <esp_ble_mesh_networking_api.h>
 #include <esp_ble_mesh_provisioning_api.h>
 #include <esp_ble_mesh_config_model_api.h>
-#include <esp_ble_mesh_generic_model_api.h>
-#include <esp_ble_mesh_local_data_operation_api.h>
 #include "mesh_config.h"
+
+// Opcode Vendor Model untuk Kontrol Pompa & Telemetri
+#define ESP_BLE_MESH_VND_MODEL_OP_SET       ESP_BLE_MESH_MODEL_OP_3(0x01, CID_ESP)
+#define ESP_BLE_MESH_VND_MODEL_OP_STATUS    ESP_BLE_MESH_MODEL_OP_3(0x02, CID_ESP)
+#define ESP_BLE_MESH_VND_MODEL_OP_SENSOR    ESP_BLE_MESH_MODEL_OP_3(0x03, CID_ESP)
 
 // State pompa (0 = MATI, 1 = HIDUP)
 static uint8_t pump_state = 0;
 
-// Deklarasi fungsi helper
+// Deklarasi fungsi
 void set_pump(uint8_t state, const char* source);
 void init_ble_mesh();
 
-// Struktur Model Config Server
+// Model Config Server (Standar SIG)
 static esp_ble_mesh_cfg_srv_t config_server = {
     .net_transmit = ESP_BLE_MESH_TRANSMIT(2, 20),
     .relay = ESP_BLE_MESH_RELAY_DISABLED,
@@ -31,23 +34,24 @@ static esp_ble_mesh_cfg_srv_t config_server = {
     .default_ttl = 7,
 };
 
-// Struktur Model Generic OnOff Server
-static esp_ble_mesh_gen_onoff_srv_t onoff_server = {
-    .rsp_ctrl = {
-        .get_auto_rsp = ESP_BLE_MESH_SERVER_AUTO_RSP,
-        .set_auto_rsp = ESP_BLE_MESH_SERVER_AUTO_RSP,
-    },
-};
-
-ESP_BLE_MESH_MODEL_PUB_DEFINE(onoff_srv_pub, 2 + 1, ROLE_NODE);
-
 static esp_ble_mesh_model_t root_models[] = {
     ESP_BLE_MESH_MODEL_CFG_SRV(&config_server),
-    ESP_BLE_MESH_MODEL_GEN_ONOFF_SRV(&onoff_srv_pub, &onoff_server),
+};
+
+// Model Vendor Server untuk Node 1 (Menerima perintah Set On/Off)
+static esp_ble_mesh_model_op_t vnd_op[] = {
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_VND_MODEL_OP_SET, 1),
+    ESP_BLE_MESH_MODEL_OP_END,
+};
+
+ESP_BLE_MESH_MODEL_PUB_DEFINE(vnd_pub, 3 + 1, ROLE_NODE);
+
+static esp_ble_mesh_model_t vnd_models[] = {
+    ESP_BLE_MESH_VENDOR_MODEL(CID_ESP, 0x0001, vnd_op, &vnd_pub, NULL),
 };
 
 static esp_ble_mesh_elem_t elements[] = {
-    ESP_BLE_MESH_ELEMENT(0, root_models, ESP_BLE_MESH_MODEL_NONE),
+    ESP_BLE_MESH_ELEMENT(0, root_models, vnd_models),
 };
 
 static esp_ble_mesh_comp_t composition = {
@@ -60,7 +64,7 @@ static esp_ble_mesh_comp_t composition = {
 
 // Konfigurasi Provisioning
 static uint8_t dev_uuid[16] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-                                0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x01 }; // Node 1 UUID
+                                0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x01 };
 static esp_ble_mesh_prov_t prov = {
     .uuid = dev_uuid,
 };
@@ -70,8 +74,8 @@ static void ble_mesh_provisioning_cb(esp_ble_mesh_prov_cb_event_t event,
                                      esp_ble_mesh_prov_cb_param_t *param) {
     switch (event) {
     case ESP_BLE_MESH_NODE_PROV_COMPLETE_EVT:
-        Serial.printf("[NODE 1] Provisioning Selesai! Unicast Addr: 0x%04x, NetKey Idx: %d\n",
-                      param->node_prov_complete.addr, param->node_prov_complete.net_idx);
+        Serial.printf("[NODE 1] Provisioning Selesai! Unicast Addr: 0x%04x\n",
+                      param->node_prov_complete.addr);
         break;
     case ESP_BLE_MESH_NODE_PROV_RESET_EVT:
         Serial.println("[NODE 1] Node di-reset dari jaringan Mesh.");
@@ -81,19 +85,15 @@ static void ble_mesh_provisioning_cb(esp_ble_mesh_prov_cb_event_t event,
     }
 }
 
-// Callback saat menerima pesan Generic OnOff Server
-static void ble_mesh_generic_server_cb(esp_ble_mesh_generic_server_cb_event_t event,
-                                       esp_ble_mesh_generic_server_cb_param_t *param) {
+// Callback saat menerima pesan Custom/Vendor Model
+static void ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event,
+                                     esp_ble_mesh_model_cb_param_t *param) {
     switch (event) {
-    case ESP_BLE_MESH_GENERIC_SERVER_STATE_CHANGE_EVT:
-        if (param->ctx.recv_op == ESP_BLE_MESH_MODEL_OP_GEN_ONOFF_SET ||
-            param->ctx.recv_op == ESP_BLE_MESH_MODEL_OP_GEN_ONOFF_SET_UNACK) {
-            uint8_t new_state = param->value.state_change.onoff_set.onoff;
-            set_pump(new_state, "BLE Mesh Command");
+    case ESP_BLE_MESH_MODEL_OPERATION_EVT:
+        if (param->model_operation.opcode == ESP_BLE_MESH_VND_MODEL_OP_SET) {
+            uint8_t new_state = param->model_operation.msg[0];
+            set_pump(new_state, "BLE Mesh Vendor Command");
         }
-        break;
-    case ESP_BLE_MESH_GENERIC_SERVER_RECV_GET_MSG_EVT:
-        Serial.println("[NODE 1] Menerima permintaan GET status dari mesh.");
         break;
     default:
         break;
@@ -102,16 +102,18 @@ static void ble_mesh_generic_server_cb(esp_ble_mesh_generic_server_cb_event_t ev
 
 void set_pump(uint8_t state, const char* source) {
     pump_state = state ? 1 : 0;
-    // Modul relay 5V aktif HIGH / LOW tergantung modul. Umumnya aktif LOW (relay ON = LOW).
-    // Disesuaikan: jika HIGH mengaktifkan pompa:
-    digitalWrite(PIN_RELAY_PUMP, pump_state ? HIGH : LOW);
+    
+    // MODUL RELAY ACTIVE-LOW:
+    // pump_state = 1 (ON)  --> Kirim LOW  (Relay Menarik / Menyala)
+    // pump_state = 0 (OFF) --> Kirim HIGH (Relay Lepas / Mati)
+    digitalWrite(PIN_RELAY_PUMP, pump_state ? LOW : HIGH);
     digitalWrite(PIN_NODE1_LED, pump_state ? HIGH : LOW);
 
     Serial.println("==================================================");
     Serial.printf("[NODE 1 - POMPA] Status Pompa: %s (Sumber: %s)\n",
                   pump_state ? ">>> MENYALA (ON) <<<" : ">>> PADAM (OFF) <<<", source);
-    Serial.printf("[NODE 1 - POMPA] Pin GPIO %d Level: %s\n",
-                  PIN_RELAY_PUMP, pump_state ? "HIGH" : "LOW");
+    Serial.printf("[NODE 1 - POMPA] GPIO %d Signal Level: %s (Active-LOW Relay)\n",
+                  PIN_RELAY_PUMP, pump_state ? "LOW (0V)" : "HIGH (3.3V)");
     Serial.println("==================================================");
 }
 
@@ -124,9 +126,9 @@ void init_ble_mesh() {
         return;
     }
 
-    err = esp_ble_mesh_register_generic_server_callback(ble_mesh_generic_server_cb);
+    err = esp_ble_mesh_register_custom_model_callback(ble_mesh_custom_model_cb);
     if (err != ESP_OK) {
-        Serial.printf("[NODE 1] Gagal register server callback: %d\n", err);
+        Serial.printf("[NODE 1] Gagal register custom model callback: %d\n", err);
         return;
     }
 
@@ -136,8 +138,8 @@ void init_ble_mesh() {
         return;
     }
 
-    Serial.println("[NODE 1] BLE Mesh Generic OnOff Server Berhasil Dimulai!");
-    Serial.println("[NODE 1] Node wajib siaga mendengar perintah On/Off dari Node 2 / Node 4.");
+    Serial.println("[NODE 1] BLE Mesh Node 1 (Pompa Server) Berhasil Dimulai!");
+    Serial.println("[NODE 1] Node siaga mendengar perintah On/Off dari Mesh.");
 }
 
 void setup() {
@@ -145,13 +147,16 @@ void setup() {
     delay(1000);
 
     Serial.println("\n--------------------------------------------------");
-    Serial.println("DESIOT ITS - NODE 1: POMPA AIR DC (ONOFF SERVER)");
+    Serial.println("DESIOT ITS - NODE 1: POMPA AIR DC (VENDOR SERVER)");
+    Serial.println("Modul Relay: Active-LOW Mode (1 = Nyala, 0 = Mati)");
     Serial.println("--------------------------------------------------");
 
     // Konfigurasi Pin Relay dan LED
     pinMode(PIN_RELAY_PUMP, OUTPUT);
     pinMode(PIN_NODE1_LED, OUTPUT);
-    digitalWrite(PIN_RELAY_PUMP, LOW); // Awal mati
+    
+    // Awal: Pompa Mati (Active-LOW butuh HIGH untuk mati)
+    digitalWrite(PIN_RELAY_PUMP, HIGH);
     digitalWrite(PIN_NODE1_LED, LOW);
 
     // Inisialisasi Stack Bluetooth & Mesh
@@ -161,7 +166,6 @@ void setup() {
 }
 
 void loop() {
-    // Penanganan perintah manual melalui Serial Monitor untuk keperluan uji coba praktikum
     if (Serial.available()) {
         char ch = Serial.read();
         if (ch == '1') {
