@@ -32,13 +32,14 @@ static const uint8_t dev_app_key[16] = {
     0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99
 };
 
-// --- Pinout Hardware Tiap Node ---
+// --- Pinout Hardware Tiap Node (Disesuaikan untuk ESP32-S3) ---
 // Node 1: Pompa Air DC
-#define PIN_RELAY_PUMP          23 // Output GPIO pemicu Modul Relay 5V
+#define PIN_RELAY_PUMP          10 // Output GPIO pemicu Modul Relay 5V (GPIO 10 pada ESP32-S3)
 #define PIN_NODE1_LED           2  // Indikator status onboard LED
 
 // Node 2: Sensor Kelembapan Tanah (LPN)
-#define PIN_SOIL_ANALOG         34 // Input ADC1_CH6 membaca Capacitive Sensor v1.2
+// Catatan: Pada ESP32-S3, channel ADC1 adalah GPIO 1 - 10. GPIO 4 adalah ADC1_CH3.
+#define PIN_SOIL_ANALOG         4  // Input ADC1_CH3 membaca Capacitive Sensor v1.2
 #define SOIL_DRY_THRESHOLD      2600 // ADC > 2600 = Kering (butuh disiram)
 #define SOIL_WET_THRESHOLD      1800 // ADC < 1800 = Basah / Cukup air
 #define LPN_SLEEP_SEC           30   // Durasi deep-sleep berkala (detik)

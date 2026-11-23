@@ -12,6 +12,7 @@
 #include <esp_ble_mesh_networking_api.h>
 #include <esp_ble_mesh_provisioning_api.h>
 #include <esp_ble_mesh_generic_model_api.h>
+#include <esp_ble_mesh_config_model_api.h>
 #include <esp_ble_mesh_low_power_api.h>
 #include "mesh_config.h"
 
@@ -19,13 +20,22 @@
 RTC_DATA_ATTR int boot_count = 0;
 RTC_DATA_ATTR int last_moisture_raw = 0;
 
+// Struktur Model Config Server
+static esp_ble_mesh_cfg_srv_t config_server = {
+    .net_transmit = ESP_BLE_MESH_TRANSMIT(2, 20),
+    .relay = ESP_BLE_MESH_RELAY_DISABLED,
+    .relay_retransmit = ESP_BLE_MESH_TRANSMIT(2, 20),
+    .beacon = ESP_BLE_MESH_BEACON_ENABLED,
+    .default_ttl = 7,
+};
+
 // Model Generic OnOff Client untuk mengirim perintah ke Pompa (Node 1)
 static esp_ble_mesh_client_t onoff_client;
 
 ESP_BLE_MESH_MODEL_PUB_DEFINE(onoff_cli_pub, 2 + 1, ROLE_NODE);
 
 static esp_ble_mesh_model_t root_models[] = {
-    ESP_BLE_MESH_MODEL_CFG_SRV(),
+    ESP_BLE_MESH_MODEL_CFG_SRV(&config_server),
     ESP_BLE_MESH_MODEL_GEN_ONOFF_CLI(&onoff_cli_pub, &onoff_client),
 };
 
@@ -35,13 +45,16 @@ static esp_ble_mesh_elem_t elements[] = {
 
 static esp_ble_mesh_comp_t composition = {
     .cid = CID_ESP,
-    .elements = elements,
+    .pid = 0x0002,
+    .vid = 0x0001,
     .element_count = ARRAY_SIZE(elements),
+    .elements = elements,
 };
 
+static uint8_t dev_uuid[16] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                                0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x02 }; // Node 2 UUID
 static esp_ble_mesh_prov_t prov = {
-    .uuid = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-              0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x02 }, // Node 2 UUID
+    .uuid = dev_uuid,
 };
 
 // Fungsi membaca analog kelembapan dengan averaging filter

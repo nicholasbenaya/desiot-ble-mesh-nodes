@@ -10,6 +10,7 @@
 #include <esp_ble_mesh_common_api.h>
 #include <esp_ble_mesh_networking_api.h>
 #include <esp_ble_mesh_provisioning_api.h>
+#include <esp_ble_mesh_config_model_api.h>
 #include "mesh_config.h"
 
 // Statistik Routing Paket
@@ -17,9 +18,18 @@ static unsigned long packets_relayed = 0;
 static unsigned long lpn_messages_cached = 0;
 static bool friend_established = false;
 
+// Struktur Model Config Server
+static esp_ble_mesh_cfg_srv_t config_server = {
+    .net_transmit = ESP_BLE_MESH_TRANSMIT(2, 20),
+    .relay = ESP_BLE_MESH_RELAY_ENABLED,
+    .relay_retransmit = ESP_BLE_MESH_TRANSMIT(2, 20),
+    .beacon = ESP_BLE_MESH_BEACON_ENABLED,
+    .default_ttl = 7,
+};
+
 // Root Models (Configuration Server)
 static esp_ble_mesh_model_t root_models[] = {
-    ESP_BLE_MESH_MODEL_CFG_SRV(),
+    ESP_BLE_MESH_MODEL_CFG_SRV(&config_server),
 };
 
 static esp_ble_mesh_elem_t elements[] = {
@@ -28,13 +38,16 @@ static esp_ble_mesh_elem_t elements[] = {
 
 static esp_ble_mesh_comp_t composition = {
     .cid = CID_ESP,
-    .elements = elements,
+    .pid = 0x0003,
+    .vid = 0x0001,
     .element_count = ARRAY_SIZE(elements),
+    .elements = elements,
 };
 
+static uint8_t dev_uuid[16] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                                0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x03 }; // Node 3 UUID
 static esp_ble_mesh_prov_t prov = {
-    .uuid = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-              0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x03 }, // Node 3 UUID
+    .uuid = dev_uuid,
 };
 
 // Callback Provisioning & Status Jaringan
@@ -53,7 +66,7 @@ static void ble_mesh_provisioning_cb(esp_ble_mesh_prov_cb_event_t event,
 void init_relay_friend_mesh() {
     esp_err_t err;
 
-    err = esp_ble_mesh_register_prov_cb(ble_mesh_provisioning_cb);
+    err = esp_ble_mesh_register_prov_callback(ble_mesh_provisioning_cb);
     if (err != ESP_OK) {
         Serial.printf("[NODE 3] Gagal reg prov cb: %d\n", err);
         return;
